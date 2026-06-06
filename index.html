@@ -140,6 +140,7 @@ pre.code{background:var(--surface2); border:1px solid var(--line); border-radius
   <div class="brand"><span class="crumb"></span> Bakery Center</div>
   <button class="iconbtn" id="btnLang" onclick="toggleLang()">EN</button>
   <button class="iconbtn" id="btnTheme" onclick="toggleTheme()">◐</button>
+  <button class="iconbtn" onclick="openHelp()">?</button>
   <button class="iconbtn" onclick="openSettings()">⚙</button>
 </header>
 <main id="view"></main>
@@ -202,6 +203,7 @@ const I18N = {
   auto_backup_done:["📦 Daily backup saved","📦 บันทึก backup ประจำวันแล้ว"],
   last_backup:["Last backup","backup ล่าสุด"], never_backup:["never yet","ยังไม่เคย"],
   auto_backup_note:["Auto-backup is on: a backup file downloads the first time you open the app each day.","backup อัตโนมัติเปิดอยู่: ไฟล์สำรองจะถูกดาวน์โหลดครั้งแรกที่เปิดแอปในแต่ละวัน"],
+  help_title:["Help & Updates","ช่วยเหลือ & อัปเดต"], help_guide:["User Guide","คู่มือใช้งาน"], help_changelog:["What's New","มีอะไรใหม่"],
   ai_title:["Import recipe with AI","Import สูตรด้วย AI"],
   ai_how:["1. Copy the prompt below\n2. Paste it into any AI (Claude, ChatGPT, Gemini)\n3. Paste the recipe text after it (any language, cups OK)\n4. Copy the JSON the AI returns and paste it in the box below","1. คัดลอก prompt ด้านล่าง\n2. วางใน AI ตัวไหนก็ได้ (Claude, ChatGPT, Gemini)\n3. แปะข้อความสูตรต่อท้าย (ภาษาไหน/หน่วย cup ก็ได้)\n4. คัดลอก JSON ที่ AI ตอบ มาวางในช่องล่าง"],
   copy_prompt:["Copy Prompt","คัดลอก Prompt"], paste_json:["Paste JSON from AI here...","วาง JSON จาก AI ที่นี่..."],
@@ -974,7 +976,7 @@ async function openSettings(){
   <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this)">
   <button class="btn ghost big" style="margin-top:10px" onclick="$('#impFile').click()">⬆ ${t('import_data')}</button>
   <div class="note" style="margin-top:14px"><b>${t('last_backup')}:</b> ${lb||t('never_backup')}<br>${t('auto_backup_note')}</div>
-  <div class="note" style="margin-top:18px;text-align:center">Bakery Center v1.1 · Made with 🤎 for bakers</div>
+  <div class="note" style="margin-top:18px;text-align:center">Bakery Center v1.2 · Made with 🤎 for bakers</div>
   <button class="btn ghost big" style="margin-top:10px" onclick="closeModal()">${t('close')}</button>`);
 }
 async function gatherBackup(){
@@ -1022,6 +1024,42 @@ function armAutoBackup(){
   const h=()=>{document.removeEventListener('click',h,true);document.removeEventListener('touchend',h,true);runAutoBackup();};
   document.addEventListener('click',h,true);
   document.addEventListener('touchend',h,true);
+}
+
+/* ============ Help: User Guide & Changelog ============ */
+const GUIDE=[
+ {icon:'📚',t:{en:'Recipes',th:'คลังสูตร'},d:{en:'Browse, search and filter recipes by category. Tap one to open it. Change the batch size with ×0.5–×2 or by typing a target flour weight — every ingredient updates. Add a recipe with the ＋ button, or import one with ✦ AI.',th:'ดู ค้นหา และกรองสูตรตามหมวด แตะสูตรเพื่อเปิด ปรับขนาดด้วย ×0.5–×2 หรือพิมพ์น้ำหนักแป้งที่ต้องการ ส่วนผสมทุกตัวจะปรับตาม เพิ่มสูตรด้วยปุ่ม ＋ หรือ Import ด้วย ✦ AI'}},
+ {icon:'✦',t:{en:'Import with AI',th:'Import ด้วย AI'},d:{en:'Tap ✦ Import with AI, copy the prompt, and paste it into any AI chat (Claude, ChatGPT, Gemini) with a recipe in any language or units. Paste the JSON the AI returns — the recipe is added with amounts converted to grams.',th:'กด ✦ Import ด้วย AI แล้วคัดลอก prompt ไปวางในแชต AI ตัวไหนก็ได้ (Claude, ChatGPT, Gemini) พร้อมข้อความสูตร (ภาษา/หน่วยไหนก็ได้) เอา JSON ที่ AI ตอบมาวาง สูตรจะถูกเพิ่มพร้อมแปลงเป็นกรัมให้'}},
+ {icon:'🔥',t:{en:'Guided Baking',th:'โหมดเริ่มอบ'},d:{en:'Open a recipe and tap ▶ Start Baking. The app guides you step by step with a timer on each step and rings a bell when time is up. Use Pause, +5 min or Skip as needed. The timer stays correct even if the screen sleeps, and you can close the app and resume later.',th:'เปิดสูตรแล้วกด ▶ เริ่มอบ แอปจะพาทำทีละขั้น มีจับเวลาทุกขั้นและส่งเสียงเตือนเมื่อครบเวลา ใช้ปุ่มหยุดพัก +5 นาที หรือข้ามได้ เวลายังแม่นแม้จอดับ และปิดแอปแล้วกลับมาทำต่อได้'}},
+ {icon:'🧰',t:{en:'Tools',th:'เครื่องมือ'},d:{en:'Five baker calculators: Baker’s %, Hydration (counts the water in your starter), Unit converter (cups/tbsp/tsp/oz → grams + °F/°C), DDT water temperature, and Pan size converter.',th:'เครื่องคำนวณ 5 ตัว: Baker’s %, Hydration (รวมน้ำใน starter), แปลงหน่วย (cup/tbsp/tsp/oz → กรัม + °F/°C), DDT อุณหภูมิน้ำ และแปลงขนาดถาด'}},
+ {icon:'🫙',t:{en:'Starter Tracker',th:'ตัวจด Starter'},d:{en:'Tap Log Feeding every time you feed your sourdough starter. The card shows how many hours ago you last fed it, and the timeline keeps the full history.',th:'กดบันทึกให้อาหารทุกครั้งที่ให้อาหาร starter การ์ดจะบอกว่าให้อาหารล่าสุดกี่ชั่วโมงที่แล้ว และไทม์ไลน์เก็บประวัติทั้งหมด'}},
+ {icon:'📓',t:{en:'Bake Log',th:'สมุดบันทึกการอบ'},d:{en:'Record each bake with a 1–5 star rating, notes, and up to 3 photos. After you finish a guided bake, a log entry opens automatically with the recipe filled in.',th:'บันทึกการอบแต่ละครั้งด้วยดาว 1–5 โน้ต และรูปสูงสุด 3 รูป เมื่ออบเสร็จในโหมดเริ่มอบ หน้าบันทึกจะเปิดให้อัตโนมัติพร้อมชื่อสูตร'}},
+ {icon:'💾',t:{en:'Backup & Data',th:'สำรองข้อมูล'},d:{en:'Your data lives only on this device. Tap ⚙ to Export a backup file, or Import one to restore. A backup also downloads automatically once a day. Never tap “Clear Website Data” in your browser — it erases everything.',th:'ข้อมูลอยู่ในเครื่องนี้เท่านั้น กด ⚙ เพื่อ Export ไฟล์สำรอง หรือ Import เพื่อกู้คืน และจะมีไฟล์ backup ดาวน์โหลดอัตโนมัติวันละครั้ง อย่ากด “Clear Website Data” ในเบราว์เซอร์เด็ดขาด เพราะข้อมูลจะหายหมด'}},
+ {icon:'🌐',t:{en:'Language, Theme & Install',th:'ภาษา ธีม และติดตั้ง'},d:{en:'Use the top bar to switch language (EN/TH) and light/dark mode anytime. Add the app to your home screen to open it full-screen like a real app — it works offline.',th:'ใช้แถบบนสลับภาษา (EN/TH) และโหมดสว่าง/มืดได้ทุกเมื่อ เพิ่มแอปลงหน้าจอโฮมเพื่อเปิดเต็มจอเหมือนแอปจริง ใช้งานออฟไลน์ได้'}},
+];
+const CHANGELOG=[
+ {v:'1.2',d:'2026-06-06',c:[{en:'Added this in-app User Guide and What’s New list (the ? button).',th:'เพิ่มคู่มือการใช้งานและรายการอัปเดตในแอป (ปุ่ม ?)'}]},
+ {v:'1.1',d:'2026-06-06',c:[
+   {en:'Automatic daily backup — a backup file downloads the first time you open the app each day.',th:'สำรองข้อมูลอัตโนมัติวันละครั้ง — เปิดแอปครั้งแรกของวันแล้วไฟล์ backup จะดาวน์โหลดให้เอง'},
+   {en:'Settings now shows the date of your last backup.',th:'หน้า Settings แสดงวันที่ backup ล่าสุด'}]},
+ {v:'1.0',d:'2026-06-06',c:[{en:'First release: recipe library, guided baking with timers, 5 calculators, sourdough starter tracker, bake log, EN/TH, dark mode, offline, backup & restore.',th:'เวอร์ชันแรก: คลังสูตร, โหมดเริ่มอบพร้อมจับเวลา, เครื่องคำนวณ 5 ตัว, ตัวจด starter, สมุดบันทึกการอบ, 2 ภาษา EN/TH, โหมดมืด, ใช้ออฟไลน์, สำรอง/กู้ข้อมูล'}]},
+];
+let helpTab='guide';
+function openHelp(tab){
+  if(tab)helpTab=tab;
+  const guide=GUIDE.map(g=>`<div class="card flat" style="background:var(--surface2);margin-bottom:10px;padding:12px">
+    <b>${g.icon} ${esc(tn(g.t))}</b><div class="note" style="margin-top:4px">${esc(tn(g.d))}</div></div>`).join('');
+  const log=CHANGELOG.map(e=>`<div class="card flat" style="margin-bottom:10px;padding:10px 12px">
+    <div class="row"><b style="font-family:'Fraunces',serif;color:var(--primary)">v${e.v}</b>
+      <span class="note grow" style="text-align:right">${e.d}</span></div>
+    <ul style="margin:6px 0 0;padding-left:18px">${e.c.map(c=>`<li class="note">${esc(tn(c))}</li>`).join('')}</ul></div>`).join('');
+  modal(`<h2>${t('help_title')}</h2>
+  <div class="seg" style="margin-bottom:14px">
+    <button class="${helpTab==='guide'?'on':''}" onclick="openHelp('guide')">${t('help_guide')}</button>
+    <button class="${helpTab==='log'?'on':''}" onclick="openHelp('log')">${t('help_changelog')}</button>
+  </div>
+  ${helpTab==='guide'?guide:log}
+  <button class="btn ghost big" style="margin-top:8px" onclick="closeModal()">${t('close')}</button>`);
 }
 
 /* ============ Boot ============ */
