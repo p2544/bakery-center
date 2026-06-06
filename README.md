@@ -5,6 +5,23 @@
 
 ---
 
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/recipes.jpg" width="230"><br><sub><b>Recipe Library</b><br>คลังสูตร</sub></td>
+    <td align="center"><img src="screenshots/recipe-detail.jpg" width="230"><br><sub><b>Scale &amp; baker's %</b><br>ปรับขนาดสูตร</sub></td>
+    <td align="center"><img src="screenshots/bake-timer.jpg" width="230"><br><sub><b>Guided baking timer</b><br>โหมดเริ่มอบ</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/tools.jpg" width="230"><br><sub><b>Baker's tools</b><br>เครื่องมือ 5 ตัว</sub></td>
+    <td align="center"><img src="screenshots/starter.jpg" width="230"><br><sub><b>Starter tracker</b><br>ตัวจด Starter</sub></td>
+    <td align="center"><img src="screenshots/dark-mode.jpg" width="230"><br><sub><b>Dark mode</b><br>โหมดมืด</sub></td>
+  </tr>
+</table>
+
+---
+
 ## 🇹🇭 ภาษาไทย
 
 ### 📚 คลังสูตร (Recipes)
