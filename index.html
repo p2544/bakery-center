@@ -199,6 +199,9 @@ const I18N = {
   export_note:["Download all recipes, logs & starter data as one file. Do this monthly!","ดาวน์โหลดสูตร บันทึก และข้อมูล starter ทั้งหมดเป็นไฟล์เดียว แนะนำทำเดือนละครั้ง!"],
   import_warn:["Importing replaces ALL current data. Continue?","การ import จะแทนที่ข้อมูลทั้งหมด ดำเนินการต่อ?"],
   data_saved:["Saved ✓","บันทึกแล้ว ✓"], copied:["Copied ✓","คัดลอกแล้ว ✓"],
+  auto_backup_done:["📦 Daily backup saved","📦 บันทึก backup ประจำวันแล้ว"],
+  last_backup:["Last backup","backup ล่าสุด"], never_backup:["never yet","ยังไม่เคย"],
+  auto_backup_note:["Auto-backup is on: a backup file downloads the first time you open the app each day.","backup อัตโนมัติเปิดอยู่: ไฟล์สำรองจะถูกดาวน์โหลดครั้งแรกที่เปิดแอปในแต่ละวัน"],
   ai_title:["Import recipe with AI","Import สูตรด้วย AI"],
   ai_how:["1. Copy the prompt below\n2. Paste it into any AI (Claude, ChatGPT, Gemini)\n3. Paste the recipe text after it (any language, cups OK)\n4. Copy the JSON the AI returns and paste it in the box below","1. คัดลอก prompt ด้านล่าง\n2. วางใน AI ตัวไหนก็ได้ (Claude, ChatGPT, Gemini)\n3. แปะข้อความสูตรต่อท้าย (ภาษาไหน/หน่วย cup ก็ได้)\n4. คัดลอก JSON ที่ AI ตอบ มาวางในช่องล่าง"],
   copy_prompt:["Copy Prompt","คัดลอก Prompt"], paste_json:["Paste JSON from AI here...","วาง JSON จาก AI ที่นี่..."],
@@ -963,22 +966,30 @@ function addLogPhoto(input){
 async function delLog(id){if(!confirm(t('confirm_del')))return; await dbDel('logs',id); vLog();}
 
 /* ============ Settings / Backup ============ */
-function openSettings(){
+async function openSettings(){
+  const lb=await kvGet('lastBackup');
   modal(`<h2>${t('settings')}</h2>
   <div class="note" style="margin-bottom:14px">${t('export_note')}</div>
   <button class="btn big" onclick="exportData()">⬇ ${t('export_data')}</button>
   <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this)">
   <button class="btn ghost big" style="margin-top:10px" onclick="$('#impFile').click()">⬆ ${t('import_data')}</button>
-  <div class="note" style="margin-top:18px;text-align:center">Bakery Center v1.0 · Made with 🤎 for bakers</div>
+  <div class="note" style="margin-top:14px"><b>${t('last_backup')}:</b> ${lb||t('never_backup')}<br>${t('auto_backup_note')}</div>
+  <div class="note" style="margin-top:18px;text-align:center">Bakery Center v1.1 · Made with 🤎 for bakers</div>
   <button class="btn ghost big" style="margin-top:10px" onclick="closeModal()">${t('close')}</button>`);
 }
-async function exportData(){
-  const data={app:'bakery-center',version:1,exportedAt:new Date().toISOString(),
+async function gatherBackup(){
+  return {app:'bakery-center',version:1,exportedAt:new Date().toISOString(),
     recipes:await dbAll('recipes'),logs:await dbAll('logs'),feedings:await dbAll('feedings')};
+}
+function downloadBackup(data){
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='bakery-center-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
-  toast(t('data_saved'));
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+async function exportData(){
+  downloadBackup(await gatherBackup());
+  await kvSet('lastBackup',dayStr()); toast(t('data_saved'));
 }
 async function importData(input){
   const file=input.files[0]; if(!file)return;
@@ -995,6 +1006,24 @@ async function importData(input){
   input.value='';
 }
 
+/* ============ Auto daily backup ============ */
+function dayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+let backupDue=false;
+async function runAutoBackup(){
+  if(!backupDue)return; backupDue=false;
+  const data=await gatherBackup();
+  // backup เฉพาะเมื่อมีข้อมูลของผู้ใช้จริง (ไม่นับสูตร seed) — กันไฟล์เปล่ารกเครื่อง
+  if(!(data.logs.length||data.feedings.length||data.recipes.some(r=>!r.seed)))return;
+  downloadBackup(data);
+  await kvSet('lastBackup',dayStr()); toast(t('auto_backup_done'));
+}
+function armAutoBackup(){
+  // iOS ยอมให้ดาวน์โหลดไฟล์เฉพาะตอนมี user gesture → ยิง backup ตอนแตะหน้าจอครั้งแรกของการเปิดแอป
+  const h=()=>{document.removeEventListener('click',h,true);document.removeEventListener('touchend',h,true);runAutoBackup();};
+  document.addEventListener('click',h,true);
+  document.addEventListener('touchend',h,true);
+}
+
 /* ============ Boot ============ */
 (async function(){
   await openDB();
@@ -1006,6 +1035,7 @@ async function importData(input){
   document.querySelector('meta[name=theme-color]').content=th==='dark'?'#191210':'#F7EFE3';
   session=await kvGet('session');
   if(session) TAB='bake';
+  if((await kvGet('lastBackup'))!==dayStr()){ backupDue=true; armAutoBackup(); }
   render();
 })();
 </script>
