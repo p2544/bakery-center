@@ -59,6 +59,12 @@
 - บันทึกผลแต่ละครั้ง: ให้ดาว 1–5, เขียนโน้ต (อะไรดี อะไรต้องปรับ), แนบรูปได้สูงสุด 3 รูป
 - รูปถูกย่อขนาดอัตโนมัติ ไม่ทำให้เครื่องเต็ม
 
+### 💰 คำนวณต้นทุน (Cost)
+- **สมุดราคาส่วนผสม** — ตั้งราคา ฿/กก. ของแต่ละวัตถุดิบครั้งเดียว ทุกสูตรนำไปใช้คำนวณให้อัตโนมัติ (มีปุ่มดึงชื่อส่วนผสมจากสูตรมาเติมให้)
+- แต่ละสูตรแสดง **ต้นทุนรวม** และ **ต้นทุนต่อชิ้น** (ถ้าใส่จำนวนชิ้น) — ปรับตามขนาดที่ scale (×0.5–×2) อัตโนมัติ
+- ใส่ราคาเฉพาะส่วนผสมในสูตรเดียวก็ได้ (override สมุดราคากลาง); น้ำคิดเป็นฟรี
+- ราคาส่วนผสมถูกรวมในไฟล์ backup ด้วย
+
 ### ⚙️ ทั่วไป & ข้อมูล
 - **2 ภาษา** ไทย / อังกฤษ สลับได้ทุกเมื่อ (คงศัพท์เทคนิคเบเกอรี่เป็นอังกฤษ)
 - **โหมดมืด / สว่าง**
@@ -106,6 +112,12 @@
 ### 📓 Bake Log
 - Record each bake: a 1–5 star rating, notes (what worked, what to change), and up to 3 photos.
 - Photos are auto-resized so they don't fill up your device.
+
+### 💰 Cost
+- **Ingredient Prices book** — set the ฿/kg of each ingredient once and every recipe uses it automatically (a button pulls ingredient names from your recipes to fill the list).
+- Each recipe shows its **total cost** and **cost per piece** (if you set a yield) — scaling automatically with the batch size (×0.5–×2).
+- You can also set a price on a single ingredient inside one recipe (overrides the price book); water is counted as free.
+- Ingredient prices are included in the backup file.
 
 ### ⚙️ General & Data
 - **Two languages** — Thai / English, switch anytime (technical baking terms kept in English).

@@ -212,6 +212,13 @@ const I18N = {
   min_short:["min","นาที"], hr_short:["h","ชม."],
   started:["Started","เริ่มเมื่อ"], scaled:["scaled","ปรับขนาด"],
   source:["Source (URL / book)","ที่มา (URL / หนังสือ)"], notes_opt:["Recipe notes (optional)","โน้ตของสูตร (ไม่บังคับ)"],
+  cost:["Cost","ต้นทุน"], total_cost:["Total cost","ต้นทุนรวม"], cost_per_piece:["Cost per piece","ต้นทุนต่อชิ้น"],
+  yield_pieces:["Yield (pieces, optional)","จำนวนชิ้นที่ได้ (ไม่บังคับ)"], price_per_kg:["฿/kg","฿/กก."],
+  price_book:["Ingredient Prices","สมุดราคาส่วนผสม"],
+  price_book_note:["Set the price per kilogram for ingredients you use often. Recipes use these to estimate cost — water is counted as free.","ตั้งราคาต่อกิโลกรัมของส่วนผสมที่ใช้บ่อย สูตรจะใช้ราคานี้ประเมินต้นทุนให้ (น้ำคิดเป็นฟรี)"],
+  no_prices:["No ingredient prices set yet","ยังไม่ได้ตั้งราคาส่วนผสม"], set_prices:["Set ingredient prices","ตั้งราคาส่วนผสม"],
+  unpriced:["No price set","ยังไม่ได้ตั้งราคา"], pull_from_recipes:["Add ingredients from recipes","ดึงชื่อส่วนผสมจากสูตร"],
+  price_name:["Ingredient","ส่วนผสม"], price_book_btn:["💰 Ingredient Prices","💰 สมุดราคาส่วนผสม"],
 };
 let LANG = 'en';
 const t = k => (I18N[k]||[k,k])[LANG==='en'?0:1];
@@ -368,7 +375,7 @@ const SEEDS = [
 ];
 
 /* ============ App state & helpers ============ */
-let TAB='recipes', recipes=[], session=null, tickInt=null, wakeLock=null;
+let TAB='recipes', recipes=[], session=null, tickInt=null, wakeLock=null, curRecipe=null;
 let recipeFilter='all', recipeSearch='';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -376,9 +383,28 @@ function toast(msg){const r=$('#toastRoot');r.innerHTML=`<div class="toast">${es
 function modal(html){$('#modalRoot').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="handle"></div>${html}</div></div>`;}
 function closeModal(){$('#modalRoot').innerHTML='';}
 const fmtG=g=>Math.round(g*10)/10;
+const fmtB=b=>Math.round(b*10)/10;          // ราคา (บาท) แสดง 1 ทศนิยม — คำนวณไม่ปัด
 const catName=c=>t('cat_'+c);
 const CATS=['sourdough','italian','cookies','brownies','other'];
 const ICONS={sourdough:'🍞',italian:'🥖',cookies:'🍪',brownies:'🍫',other:'🧁'};
+
+/* ============ Cost (ต้นทุน) ============ */
+let PRICES={};                               // สมุดราคากลาง { ชื่อส่วนผสม : ฿/กก. } เก็บใน kv 'prices'
+const pnorm=s=>(tn(s)||'').toString().trim().toLowerCase();
+const isWaterName=n=>{const s=(tn(n)||'').toLowerCase();
+  return /water|น้ำอุ่น|^น้ำ/.test(s)&&!/น้ำมัน|น้ำตาล|oil|sugar|milk|นม|honey|น้ำผึ้ง/.test(s);};
+function priceMap(){const m={};for(const k in PRICES){const v=PRICES[k];if(v>0)m[pnorm(k)]=v;}return m;}
+function ingPrice(i,pm){if(i.price>0)return i.price;const p=pm[pnorm(i.name)];return p>0?p:0;}  // ฿/กก.
+function costOf(r,scale){
+  const pm=priceMap(); let total=0; const unpriced=[];
+  r.ingredients.forEach(i=>{
+    const pk=ingPrice(i,pm);
+    if(pk>0) total += i.g*scale*pk/1000;                 // กรัม → กก. แล้วคูณราคา
+    else if(!isWaterName(i.name)) unpriced.push(tn(i.name));
+  });
+  return {total, unpriced, allUnpriced: total===0&&unpriced.length>0,
+          perPiece: r.yield>0 ? total/r.yield : null};
+}
 
 function flourTotal(r){return r.ingredients.filter(i=>i.flour).reduce((a,i)=>a+i.g,0);}
 function doughTotal(r){return r.ingredients.reduce((a,i)=>a+i.g,0);}
@@ -406,7 +432,7 @@ function renderNav(){
   $('#nav').innerHTML=NAV.map(([k,p])=>`<button class="${TAB===k?'on':''}" onclick="go('${k}')">
    <svg viewBox="0 0 24 24"><path d="${p}"/></svg>${t('nav_'+k)}</button>`).join('');
 }
-function go(tab){TAB=tab;render();}
+function go(tab){TAB=tab;curRecipe=null;render();}
 function render(){
   renderNav();
   $('#btnLang').textContent=LANG.toUpperCase();
@@ -453,9 +479,12 @@ async function vRecipes(){
 let curScale=1;
 async function vRecipeDetail(id,scale){
   const r=await dbGet('recipes',id); if(!r)return go('recipes');
-  curScale=scale||1;
+  curScale=scale||1; curRecipe=id;
   const f=flourTotal(r), hyd=hydrationOf(r);
   const isBread=r.type==='bread'&&f>0;
+  const pm=priceMap(), cost=costOf(r,curScale), showCost=!cost.allUnpriced;
+  const costCell=i=>{const pk=ingPrice(i,pm);
+    return pk>0?'฿'+fmtB(i.g*curScale*pk/1000):(isWaterName(i.name)?'฿0':'–');};
   $('#view').innerHTML=`
   <button class="iconbtn" onclick="go('recipes')" style="margin-bottom:12px">‹ ${t('nav_recipes')}</button>
   <div class="row"><div style="font-size:42px">${r.icon||ICONS[r.cat]||'🧁'}</div>
@@ -476,8 +505,18 @@ async function vRecipeDetail(id,scale){
     <table class="ing">${r.ingredients.map(i=>`<tr>
       <td>${esc(tn(i.name))}${i.flour?` <span class="chip" style="padding:1px 8px;font-size:11px">${t('is_flour')}</span>`:''}</td>
       <td>${fmtG(i.g*curScale)} g</td>
-      <td>${isBread?Math.round(i.g/f*1000)/10+'%':''}</td></tr>`).join('')}</table>
+      <td>${isBread?Math.round(i.g/f*1000)/10+'%':''}</td>
+      ${showCost?`<td style="text-align:right;color:var(--muted)">${costCell(i)}</td>`:''}</tr>`).join('')}</table>
     ${isBread?`<div class="note" style="margin-top:8px">${t('bakers_pct')} — flour = 100%</div>`:''}
+  </div>
+  <div class="card">
+    <h3>💰 ${t('cost')}</h3>
+    ${cost.allUnpriced
+      ? `<div class="note">${t('no_prices')}</div>
+         <button class="btn ghost" style="margin-top:10px" onclick="openPriceBook()">${t('set_prices')}</button>`
+      : `<div class="note">${t('total_cost')}: <b>฿${fmtB(cost.total)}</b>${cost.perPiece!=null?` · ${t('cost_per_piece')}: <b>฿${fmtB(cost.perPiece)}</b>`:''}</div>
+         ${cost.unpriced.length?`<div class="note" style="margin-top:8px;color:var(--accent)">${t('unpriced')}: ${cost.unpriced.map(esc).join(', ')}</div>`:''}
+         <button class="btn ghost" style="margin-top:10px" onclick="openPriceBook()">${t('price_book_btn')}</button>`}
   </div>
   <div class="card">
     <h3>${t('steps')}</h3>
@@ -525,13 +564,20 @@ function edRender(){
   <option value="pastry" ${ed.type==='pastry'?'selected':''}>${t('type_pastry')}</option></select>
   <label class="f">${t('source')}</label><input id="edSrc" value="${esc(ed.source||'')}">
   <label class="f">${t('notes_opt')}</label><textarea id="edNotes" rows="2">${esc(ed.notes||'')}</textarea>
+  <label class="f">${t('yield_pieces')}</label>
+  <input id="edYield" type="number" inputmode="numeric" value="${ed.yield||''}" placeholder="${t('yield_pieces')}">
   <label class="f">${t('ingredients')}</label>
-  <div id="edIngs">${ed.ingredients.map((i,x)=>`<div class="row" style="margin-bottom:8px">
-    <input class="grow" placeholder="${t('ingredient')}" value="${esc(i.name)}" onchange="ed.ingredients[${x}].name=this.value">
-    <input type="number" inputmode="decimal" style="width:84px" placeholder="g" value="${i.g||''}" onchange="ed.ingredients[${x}].g=+this.value||0">
-    <label style="font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px">${t('is_flour')}
-      <input type="checkbox" style="width:20px;height:20px" ${i.flour?'checked':''} onchange="ed.ingredients[${x}].flour=this.checked"></label>
-    <button class="del-x" onclick="ed.ingredients.splice(${x},1);edSync();edRender()">✕</button></div>`).join('')}</div>
+  <div id="edIngs">${ed.ingredients.map((i,x)=>`<div class="card flat" style="padding:10px;margin-bottom:8px">
+    <div class="row">
+      <input class="grow" placeholder="${t('ingredient')}" value="${esc(i.name)}" onchange="ed.ingredients[${x}].name=this.value">
+      <button class="del-x" onclick="ed.ingredients.splice(${x},1);edSync();edRender()">✕</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input type="number" inputmode="decimal" style="width:84px" placeholder="g" value="${i.g||''}" onchange="ed.ingredients[${x}].g=+this.value||0">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px">${t('is_flour')}
+        <input type="checkbox" style="width:20px;height:20px" ${i.flour?'checked':''} onchange="ed.ingredients[${x}].flour=this.checked"></label>
+      <input class="grow" type="number" inputmode="decimal" placeholder="${t('price_per_kg')}" value="${i.price||''}" onchange="ed.ingredients[${x}].price=+this.value||0">
+    </div></div>`).join('')}</div>
   <button class="btn ghost" onclick="edSync();ed.ingredients.push({name:'',g:0});edRender()">${t('add_ing')}</button>
   <label class="f">${t('steps')}</label>
   <div id="edSteps">${ed.steps.map((s,x)=>`<div class="card flat" style="padding:10px;margin-bottom:8px">
@@ -550,6 +596,7 @@ function edSync(){
   ed.name=$('#edName')?.value??ed.name; ed.cat=$('#edCat')?.value??ed.cat;
   ed.icon=$('#edIcon')?.value??ed.icon; ed.type=$('#edType')?.value??ed.type;
   ed.source=$('#edSrc')?.value??ed.source; ed.notes=$('#edNotes')?.value??ed.notes;
+  if($('#edYield'))ed.yield=+$('#edYield').value||0;
 }
 async function edSave(){
   edSync();
@@ -975,13 +1022,15 @@ async function openSettings(){
   <button class="btn big" onclick="exportData()">⬇ ${t('export_data')}</button>
   <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this)">
   <button class="btn ghost big" style="margin-top:10px" onclick="$('#impFile').click()">⬆ ${t('import_data')}</button>
+  <button class="btn ghost big" style="margin-top:10px" onclick="openPriceBook()">${t('price_book_btn')}</button>
   <div class="note" style="margin-top:14px"><b>${t('last_backup')}:</b> ${lb||t('never_backup')}<br>${t('auto_backup_note')}</div>
-  <div class="note" style="margin-top:18px;text-align:center">Bakery Center v1.2 · Made with 🤎 for bakers</div>
+  <div class="note" style="margin-top:18px;text-align:center">Bakery Center v1.3 · Made with 🤎 for bakers</div>
   <button class="btn ghost big" style="margin-top:10px" onclick="closeModal()">${t('close')}</button>`);
 }
 async function gatherBackup(){
   return {app:'bakery-center',version:1,exportedAt:new Date().toISOString(),
-    recipes:await dbAll('recipes'),logs:await dbAll('logs'),feedings:await dbAll('feedings')};
+    recipes:await dbAll('recipes'),logs:await dbAll('logs'),feedings:await dbAll('feedings'),
+    prices:await kvGet('prices')||{}};
 }
 function downloadBackup(data){
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
@@ -1003,9 +1052,52 @@ async function importData(input){
     for(const r of j.recipes||[])await dbPut('recipes',r);
     for(const l of j.logs||[])await dbPut('logs',l);
     for(const f of j.feedings||[])await dbPut('feedings',f);
+    if(j.prices){PRICES=j.prices; await kvSet('prices',j.prices);}
     closeModal(); toast(t('data_saved')); render();
   }catch(e){toast(t('invalid_json'));}
   input.value='';
+}
+
+/* ============ Price Book (สมุดราคากลาง) ============ */
+let pbRows=[];
+async function openPriceBook(){
+  pbRows=Object.entries(PRICES).map(([n,p])=>[n,p]);
+  if(!pbRows.length)pbRows=[['',0]];
+  pbRender();
+}
+function pbRender(){
+  modal(`<h2>${t('price_book')}</h2>
+  <div class="note" style="margin-bottom:12px">${t('price_book_note')}</div>
+  <div id="pbList">${pbRows.map((r,i)=>`<div class="row" style="margin-bottom:8px">
+    <input class="grow" placeholder="${t('price_name')}" value="${esc(r[0])}" onchange="pbRows[${i}][0]=this.value">
+    <input type="number" inputmode="decimal" style="width:96px" placeholder="${t('price_per_kg')}" value="${r[1]||''}" onchange="pbRows[${i}][1]=+this.value||0">
+    <button class="del-x" onclick="pbSync();pbRows.splice(${i},1);pbRender()">✕</button></div>`).join('')}</div>
+  <button class="btn ghost" onclick="pbSync();pbRows.push(['',0]);pbRender()">${t('add_row')}</button>
+  <button class="btn ghost" style="margin-top:8px" onclick="pbPull()">${t('pull_from_recipes')}</button>
+  <div class="row" style="margin-top:20px">
+    <button class="btn ghost grow" onclick="closeModal()">${t('cancel')}</button>
+    <button class="btn grow" onclick="pbSave()">${t('save')}</button>
+  </div>`);
+}
+function pbSync(){  // อ่านค่าจาก input ปัจจุบันกลับเข้า pbRows ก่อน re-render (onchange อาจยังไม่ยิง)
+  const list=$('#pbList'); if(!list)return;
+  [...list.children].forEach((row,i)=>{const ins=row.querySelectorAll('input');
+    if(pbRows[i]){pbRows[i][0]=ins[0].value; pbRows[i][1]=+ins[1].value||0;}});
+}
+async function pbPull(){  // ดึงชื่อส่วนผสมที่ยังไม่มีในสมุด จากทุกสูตร (ข้ามน้ำ)
+  pbSync();
+  const have=new Set(pbRows.map(r=>pnorm(r[0]))), seen=new Set();
+  for(const r of await dbAll('recipes')) r.ingredients.forEach(i=>{
+    const n=tn(i.name).trim(), k=pnorm(n);
+    if(n&&!have.has(k)&&!seen.has(k)&&!isWaterName(n)){seen.add(k); pbRows.push([n,0]);}
+  });
+  pbRender();
+}
+async function pbSave(){
+  pbSync();
+  const obj={}; pbRows.forEach(([n,p])=>{if(String(n).trim())obj[String(n).trim()]=+p||0;});
+  PRICES=obj; await kvSet('prices',obj); closeModal(); toast(t('data_saved'));
+  if(curRecipe)vRecipeDetail(curRecipe,curScale); else render();
 }
 
 /* ============ Auto daily backup ============ */
@@ -1032,12 +1124,17 @@ const GUIDE=[
  {icon:'✦',t:{en:'Import with AI',th:'Import ด้วย AI'},d:{en:'Tap ✦ Import with AI, copy the prompt, and paste it into any AI chat (Claude, ChatGPT, Gemini) with a recipe in any language or units. Paste the JSON the AI returns — the recipe is added with amounts converted to grams.',th:'กด ✦ Import ด้วย AI แล้วคัดลอก prompt ไปวางในแชต AI ตัวไหนก็ได้ (Claude, ChatGPT, Gemini) พร้อมข้อความสูตร (ภาษา/หน่วยไหนก็ได้) เอา JSON ที่ AI ตอบมาวาง สูตรจะถูกเพิ่มพร้อมแปลงเป็นกรัมให้'}},
  {icon:'🔥',t:{en:'Guided Baking',th:'โหมดเริ่มอบ'},d:{en:'Open a recipe and tap ▶ Start Baking. The app guides you step by step with a timer on each step and rings a bell when time is up. Use Pause, +5 min or Skip as needed. The timer stays correct even if the screen sleeps, and you can close the app and resume later.',th:'เปิดสูตรแล้วกด ▶ เริ่มอบ แอปจะพาทำทีละขั้น มีจับเวลาทุกขั้นและส่งเสียงเตือนเมื่อครบเวลา ใช้ปุ่มหยุดพัก +5 นาที หรือข้ามได้ เวลายังแม่นแม้จอดับ และปิดแอปแล้วกลับมาทำต่อได้'}},
  {icon:'🧰',t:{en:'Tools',th:'เครื่องมือ'},d:{en:'Five baker calculators: Baker’s %, Hydration (counts the water in your starter), Unit converter (cups/tbsp/tsp/oz → grams + °F/°C), DDT water temperature, and Pan size converter.',th:'เครื่องคำนวณ 5 ตัว: Baker’s %, Hydration (รวมน้ำใน starter), แปลงหน่วย (cup/tbsp/tsp/oz → กรัม + °F/°C), DDT อุณหภูมิน้ำ และแปลงขนาดถาด'}},
+ {icon:'💰',t:{en:'Cost',th:'ต้นทุน'},d:{en:'Each recipe shows what its ingredients cost, and the cost per piece if you set a yield in the editor. First open ⚙ Settings → Ingredient Prices and enter ฿/kg for the ingredients you use (tap “Add ingredients from recipes” to fill the list quickly). The cost scales automatically when you change the batch size, and water is counted as free.',th:'แต่ละสูตรจะบอกต้นทุนค่าวัตถุดิบ และต้นทุนต่อชิ้นถ้าใส่จำนวนชิ้นในหน้าแก้สูตร เริ่มจากกด ⚙ Settings → สมุดราคาส่วนผสม แล้วใส่ ฿/กก. ของส่วนผสมที่ใช้ (กด “ดึงชื่อส่วนผสมจากสูตร” เพื่อเติมรายการเร็วๆ) ต้นทุนจะปรับตามขนาดที่ scale อัตโนมัติ และน้ำคิดเป็นฟรี'}},
  {icon:'🫙',t:{en:'Starter Tracker',th:'ตัวจด Starter'},d:{en:'Tap Log Feeding every time you feed your sourdough starter. The card shows how many hours ago you last fed it, and the timeline keeps the full history.',th:'กดบันทึกให้อาหารทุกครั้งที่ให้อาหาร starter การ์ดจะบอกว่าให้อาหารล่าสุดกี่ชั่วโมงที่แล้ว และไทม์ไลน์เก็บประวัติทั้งหมด'}},
  {icon:'📓',t:{en:'Bake Log',th:'สมุดบันทึกการอบ'},d:{en:'Record each bake with a 1–5 star rating, notes, and up to 3 photos. After you finish a guided bake, a log entry opens automatically with the recipe filled in.',th:'บันทึกการอบแต่ละครั้งด้วยดาว 1–5 โน้ต และรูปสูงสุด 3 รูป เมื่ออบเสร็จในโหมดเริ่มอบ หน้าบันทึกจะเปิดให้อัตโนมัติพร้อมชื่อสูตร'}},
  {icon:'💾',t:{en:'Backup & Data',th:'สำรองข้อมูล'},d:{en:'Your data lives only on this device. Tap ⚙ to Export a backup file, or Import one to restore. A backup also downloads automatically once a day. Never tap “Clear Website Data” in your browser — it erases everything.',th:'ข้อมูลอยู่ในเครื่องนี้เท่านั้น กด ⚙ เพื่อ Export ไฟล์สำรอง หรือ Import เพื่อกู้คืน และจะมีไฟล์ backup ดาวน์โหลดอัตโนมัติวันละครั้ง อย่ากด “Clear Website Data” ในเบราว์เซอร์เด็ดขาด เพราะข้อมูลจะหายหมด'}},
  {icon:'🌐',t:{en:'Language, Theme & Install',th:'ภาษา ธีม และติดตั้ง'},d:{en:'Use the top bar to switch language (EN/TH) and light/dark mode anytime. Add the app to your home screen to open it full-screen like a real app — it works offline.',th:'ใช้แถบบนสลับภาษา (EN/TH) และโหมดสว่าง/มืดได้ทุกเมื่อ เพิ่มแอปลงหน้าจอโฮมเพื่อเปิดเต็มจอเหมือนแอปจริง ใช้งานออฟไลน์ได้'}},
 ];
 const CHANGELOG=[
+ {v:'1.3',d:'2026-06-06',c:[
+   {en:'Cost calculation — each recipe now shows its ingredient cost (and cost per piece if you set a yield), scaling with the batch size.',th:'คำนวณต้นทุน — แต่ละสูตรแสดงต้นทุนค่าวัตถุดิบ (และต้นทุนต่อชิ้นถ้าใส่จำนวนชิ้น) ปรับตามขนาดที่ scale'},
+   {en:'New Ingredient Prices book (⚙ Settings) — set ฿/kg once and every recipe uses it; you can also set a price on a single ingredient inside a recipe.',th:'เพิ่มสมุดราคาส่วนผสม (⚙ Settings) — ตั้ง ฿/กก. ครั้งเดียว ทุกสูตรนำไปใช้; หรือใส่ราคาเฉพาะส่วนผสมในสูตรก็ได้'},
+   {en:'Ingredient prices are included in your backup file.',th:'ราคาส่วนผสมถูกรวมอยู่ในไฟล์ backup ด้วย'}]},
  {v:'1.2',d:'2026-06-06',c:[{en:'Added this in-app User Guide and What’s New list (the ? button).',th:'เพิ่มคู่มือการใช้งานและรายการอัปเดตในแอป (ปุ่ม ?)'}]},
  {v:'1.1',d:'2026-06-06',c:[
    {en:'Automatic daily backup — a backup file downloads the first time you open the app each day.',th:'สำรองข้อมูลอัตโนมัติวันละครั้ง — เปิดแอปครั้งแรกของวันแล้วไฟล์ backup จะดาวน์โหลดให้เอง'},
@@ -1065,6 +1162,7 @@ function openHelp(tab){
 /* ============ Boot ============ */
 (async function(){
   await openDB();
+  PRICES=await kvGet('prices')||{};
   const seeded=await kvGet('seeded-v1');
   if(!seeded){ for(const s of SEEDS) if(!(await dbGet('recipes',s.id))) await dbPut('recipes',s); await kvSet('seeded-v1',true); }
   LANG=(await kvGet('lang'))||'en';
